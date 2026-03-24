@@ -512,12 +512,13 @@ class _HomeScreenState extends State<HomeScreen> {
           loadMeds();
         }
         if (label == "Manage") {
-          Navigator.push(
+          await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => const ManageScreen(),
             ),
           );
+          loadMeds();
         }
       },
       child: Container(
