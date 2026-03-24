@@ -30,8 +30,28 @@ dev_dependencies:
   hive_generator: ^2.0.1
   build_runner: ^2.4.8
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+
+# --- APP ICON CONFIGURATION ---
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  adaptive_icon_background: "#F4F7FA" # Matches your app background
+  adaptive_icon_foreground: "assets/logo.png"
+
+# --- SPLASH SCREEN CONFIGURATION ---
+flutter_native_splash:
+  color: "#F4F7FA" # Background color of splash screen
+  image: "assets/logo.png"
+  android_12:
+    image: "assets/logo.png"
+    icon_background_color: "#F4F7FA"
+    color: "#F4F7FA"

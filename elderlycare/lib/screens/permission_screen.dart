@@ -1,7 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:android_intent_plus/android_intent.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 class PermissionScreen extends StatefulWidget {
   const PermissionScreen({super.key});
 
@@ -11,44 +11,33 @@ class PermissionScreen extends StatefulWidget {
 
 class _PermissionScreenState extends State<PermissionScreen> {
 
-  @override
-  void initState() {
-    super.initState();
-    checkPermissions();
-  }
+  /// 🔔 Strict Permission Flow
+  Future<void> requestPermissions() async {
+    // 1. Ask for standard Notifications
+    final notifStatus = await Permission.notification.request();
 
-  /// ✅ Check if already granted
-  Future<void> checkPermissions() async {
-  final prefs = await SharedPreferences.getInstance();
+    // 2. Ask for Exact Alarms (Android 12+)
+    // This will open settings, pause, and wait for the user to come back!
+    PermissionStatus alarmStatus = PermissionStatus.granted;
+    if (Platform.isAndroid) {
+      alarmStatus = await Permission.scheduleExactAlarm.request();
+    }
 
-  final alreadyDone = prefs.getBool("permissions_done") ?? false;
-
-  final notif = await Permission.notification.isGranted;
-
-  if (notif && alreadyDone) {
-    navigateToHome();
-  }
-}
-
-  /// 🔔 Request permissions
- Future<void> requestPermissions() async {
-  final notifStatus = await Permission.notification.request();
-
-  if (notifStatus.isGranted) {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool("permissions_done", true); // ✅ SAVE
-
-    await openExactAlarmSettings();
-  }
-}
-
-  /// ⏰ Open exact alarm screen (best possible)
-  Future<void> openExactAlarmSettings() async {
-    final intent = AndroidIntent(
-      action: 'android.settings.REQUEST_SCHEDULE_EXACT_ALARM',
-    );
-
-    await intent.launch();
+    // 3. Strict Check: Are BOTH granted?
+    if (notifStatus.isGranted && alarmStatus.isGranted) {
+      if (mounted) navigateToHome();
+    } else {
+      // ❌ Failed: Show a warning message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("BOTH permissions are required for reminders to work!"),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   void navigateToHome() {
@@ -58,40 +47,53 @@ class _PermissionScreenState extends State<PermissionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F7FA), 
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-
-            const Icon(Icons.notifications_active, size: 80),
-
-            const SizedBox(height: 20),
-
-            const Text(
-              "Enable Permissions",
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 10),
-
-            const Text(
-              "We need notification & alarm permissions to remind you on time.",
-              textAlign: TextAlign.center,
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20)
+                ],
+              ),
+              child: const Icon(Icons.notifications_active_rounded, size: 80, color: Color(0xFF4A90E2)),
             ),
 
             const SizedBox(height: 30),
 
-            ElevatedButton(
-              onPressed: requestPermissions,
-              child: const Text("Enable Permissions"),
+            const Text(
+              "Enable Permissions",
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Color(0xFF2C3E50)),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
 
-            TextButton(
-              onPressed: navigateToHome,
-              child: const Text("Continue"),
+            Text(
+              "We need notification and alarm permissions to ensure you never miss a medicine or health routine.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+            ),
+
+            const SizedBox(height: 40),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4A90E2),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+                onPressed: requestPermissions,
+                child: const Text("Allow Permissions", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
             ),
           ],
         ),
