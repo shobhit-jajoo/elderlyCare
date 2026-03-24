@@ -3,7 +3,9 @@ import 'add_medication_screen.dart';
 import '../services/storage_service.dart';
 import '../models/medication.dart';
 import 'manage_screen.dart';
-
+import 'contact_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/contact.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -76,6 +78,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return nextMed;
   }
+  Future<void> triggerSOS() async {
+  final contacts = StorageService.getAllContacts();
+
+  if (contacts.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("No emergency contacts added")),
+    );
+    return;
+  }
+
+  final first = contacts.first;
+
+  final Uri url = Uri.parse("tel:${first.phone}");
+
+  if (await canLaunchUrl(url)) {
+    await launchUrl(url);
+  } else {
+    print("Could not launch dialer");
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -417,9 +439,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               Center(
                 child: GestureDetector(
-                  onTap: () {
-                    // TODO: SOS Action
-                  },
+                  onTap: triggerSOS,
                   child: Container(
                     height: 80,
                     width: double.infinity,
@@ -520,6 +540,14 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           loadMeds();
         }
+        if (label == "Contacts") {
+  await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => const ContactScreen(),
+    ),
+  );
+}
       },
       child: Container(
         width: MediaQuery.of(context).size.width * 0.26,
