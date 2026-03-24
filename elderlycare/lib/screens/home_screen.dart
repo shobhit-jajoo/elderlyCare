@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'add_medication_screen.dart';
 import '../services/storage_service.dart';
-// import '../services/notification_service.dart'; // Keep your original imports
 import '../models/medication.dart';
 import 'manage_screen.dart';
 
@@ -24,7 +23,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void loadMeds() {
-    meds = StorageService.getAllMedications();
+    final box = StorageService.getBox();
+    // ✅ CRITICAL FIX: Ensures Hive returns strongly typed items, not dynamics
+    meds = box.values.cast<Medication>().toList();
     setState(() {});
   }
 
@@ -35,22 +36,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return "Good Evening 🌙";
   }
 
-  /// 🔥 Get only medicines
   List<Medication> getMedicines() {
     return meds.where((m) => m.type == "medicine").toList();
   }
 
-  /// 💧 Check water exists
   bool hasWater() {
     return meds.any((m) => m.type == "water");
   }
 
-  /// 🏃 Check exercise exists
   bool hasExercise() {
     return meds.any((m) => m.type == "exercise");
   }
 
-  /// ✅ Next medicine logic
   Medication? getNextMedication() {
     final medicines = getMedicines();
     if (medicines.isEmpty) return null;
@@ -85,17 +82,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final nextMed = getNextMedication();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FA), // Ultra-soft premium background
+      backgroundColor: const Color(0xFFF4F7FA),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 20),
 
-              /// ✨ BRAND NEW CUSTOM HEADER (Replaces standard AppBar)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -163,7 +158,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 30),
 
-              /// 🌅 Greeting Section
               Text(
                 greeting,
                 style: const TextStyle(
@@ -184,7 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 24),
 
-              /// 🔥 Next Medicine Highlight Card
               AnimatedContainer(
                 duration: const Duration(milliseconds: 500),
                 width: double.infinity,
@@ -195,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(28), // Softer, more modern radius
+                  borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF4A90E2).withOpacity(0.35),
@@ -207,7 +200,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                      Column(
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
@@ -256,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
-                    
+                    ),
                     Container(
                       height: 70,
                       width: 70,
@@ -273,54 +267,52 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 28),
 
-              /// 📋 Main Content Area (Scrollable)
-              
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Daily Routine",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF2C3E50),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Daily Routine",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF2C3E50),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    /// 💧 WATER
-                    if (hasWater())
-                      _buildRoutineTile(
-                        icon: Icons.water_drop_rounded,
-                        title: "Hydration",
-                        subtitle: "Active throughout the day",
-                        color: const Color(0xFF29B6F6),
-                        bgColor: Colors.lightBlue.shade50.withOpacity(0.5),
+                      if (hasWater())
+                        _buildRoutineTile(
+                          icon: Icons.water_drop_rounded,
+                          title: "Hydration",
+                          subtitle: "Active",
+                          color: const Color(0xFF29B6F6),
+                          bgColor: Colors.lightBlue.shade50.withOpacity(0.5),
+                        ),
+
+                      if (hasExercise())
+                        _buildRoutineTile(
+                          icon: Icons.fitness_center_rounded,
+                          title: "Daily Exercise",
+                          subtitle: "Morning & Evening routines",
+                          color: const Color(0xFFFFA726),
+                          bgColor: Colors.orange.shade50.withOpacity(0.5),
+                        ),
+
+                      const SizedBox(height: 20),
+                      const Text(
+                        "Your Medications",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF2C3E50),
+                        ),
                       ),
+                      const SizedBox(height: 12),
 
-                    /// 🏃 EXERCISE
-                    if (hasExercise())
-                      _buildRoutineTile(
-                        icon: Icons.fitness_center_rounded,
-                        title: "Daily Exercise",
-                        subtitle: "Morning & Evening routines",
-                        color: const Color(0xFFFFA726),
-                        bgColor: Colors.orange.shade50.withOpacity(0.5),
-                      ),
-
-                    const SizedBox(height: 20),
-                    const Text(
-                      "Your Medications",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF2C3E50),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    /// 💊 MEDICINES LIST
-                    getMedicines().isEmpty
+                      getMedicines().isEmpty
                           ? Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -348,8 +340,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             )
                           : ListView.builder(
-  physics: const NeverScrollableScrollPhysics(),
-  shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              shrinkWrap: true,
                               itemCount: getMedicines().length,
                               itemBuilder: (context, index) {
                                 final med = getMedicines()[index];
@@ -405,14 +397,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               },
                             ),
-                
-                  ],
+                    ],
+                  ),
                 ),
-              
+              ),
 
               const SizedBox(height: 10),
 
-              /// 🛠️ Quick Actions
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -424,7 +415,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 24),
 
-              /// 🚨 SOS Button (Premium Panic Button Look)
               Center(
                 child: GestureDetector(
                   onTap: () {
@@ -446,7 +436,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           blurRadius: 15,
                           offset: const Offset(0, 8),
                         ),
-                        // Inner highlight to make it look like a physical 3D button
                         BoxShadow(
                           color: Colors.white.withOpacity(0.2),
                           blurRadius: 2,
@@ -476,13 +465,11 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 20),
             ],
           ),
-          ),
         ),
       ),
     );
   }
 
-  /// Helper to build Routine Tiles (Water/Exercise)
   Widget _buildRoutineTile({
     required IconData icon,
     required String title,
@@ -512,7 +499,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Upgraded Quick Action Buttons
   Widget buildActionButton(IconData icon, String label, Color iconColor) {
     return GestureDetector(
       onTap: () async {
@@ -535,7 +521,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.26, // Dynamic sizing
+        width: MediaQuery.of(context).size.width * 0.26,
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           color: Colors.white,

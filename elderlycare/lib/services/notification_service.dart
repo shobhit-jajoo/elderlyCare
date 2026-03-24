@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data'; // ✅ Required for Int32List (Looping Alarm)
+import 'dart:typed_data';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
@@ -8,20 +8,27 @@ import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 // 🛑 TOP-LEVEL FUNCTION: Handles background button presses (Snooze / Taken)
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) async {
-  // Background isolates need timezones initialized again!
+  // 1. Re-initialize Timezones for the background isolate
   tz.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+
+  // 2. Initialize the plugin locally inside the isolate
+  final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
 
   final actionId = response.actionId;
   final id = response.id ?? 0;
   final payload = response.payload ?? "Medicine";
 
+  print("Background Action Triggered: $actionId for $payload");
+
+  // 🔥 THE KILL COMMAND: Forcefully stops the looping sound immediately
+  await notifications.cancel(id);
+
   if (actionId == 'snooze') {
-    print("SNOOZE PRESSED: Rescheduling in 5 minutes");
+    print("SNOOZE PRESSED: Rescheduling $payload in 5 minutes");
     await NotificationService.scheduleSnooze(id, payload);
   } else if (actionId == 'taken') {
-    print("MEDS TAKEN: Alarm Dismissed");
-    // Doing nothing simply lets the notification clear and the sound stop.
+    print("MEDS TAKEN: Alarm fully stopped.");
   }
 }
 
@@ -32,10 +39,7 @@ void alarmCallback() async {
       FlutterLocalNotificationsPlugin();
 
   const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-
-  await notifications.initialize(
-    const InitializationSettings(android: android),
-  );
+  await notifications.initialize(const InitializationSettings(android: android));
 
   final insistentFlag = Int32List.fromList(<int>[4]);
 
@@ -45,7 +49,7 @@ void alarmCallback() async {
     "Time to take your medicine!",
     NotificationDetails(
       android: AndroidNotificationDetails(
-        'alarm_manager_channel',
+        'alarm_manager_channel_v2',
         'Alarm Manager Reminders',
         importance: Importance.max,
         priority: Priority.max,
@@ -53,6 +57,7 @@ void alarmCallback() async {
         playSound: true,
         additionalFlags: insistentFlag,
         audioAttributesUsage: AudioAttributesUsage.alarm,
+        sound: const RawResourceAndroidNotificationSound('med_sound'), 
       ),
     ),
   );
@@ -68,12 +73,10 @@ class NotificationService {
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // ✅ Initialize with background handlers for the action buttons
     await notifications.initialize(
       const InitializationSettings(android: android),
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle taps when the app is open in the foreground
         notificationTapBackground(response);
       },
     );
@@ -91,7 +94,7 @@ class NotificationService {
     }
   }
 
-  /// 🔔 BASIC NOTIFICATION (Quick alert, no looping sound, no buttons)
+  /// 🔔 BASIC NOTIFICATION 
   static Future<void> showNotification(int id, String title, String body,
       {bool withSound = true}) async {
     await notifications.show(
@@ -110,23 +113,11 @@ class NotificationService {
     );
   }
 
-  /// ⏰ ALARM MANAGER (Heavy Background Tasks)
+  /// ⏰ ALARM MANAGER 
   static Future<void> scheduleMedicineAlarm(int hour, int minute) async {
     final now = DateTime.now();
-
-    DateTime scheduled = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
-
-    if (scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
-
-    print("Alarm scheduled at: $scheduled");
+    DateTime scheduled = DateTime(now.year, now.month, now.day, hour, minute);
+    if (scheduled.isBefore(now)) scheduled = scheduled.add(const Duration(days: 1));
 
     await AndroidAlarmManager.oneShotAt(
       scheduled,
@@ -137,7 +128,7 @@ class NotificationService {
     );
   }
 
-  /// 💊 MEDICINE ALARM (ZonedSchedule with Custom Sound & Buttons)
+  /// 💊 SMART SCHEDULER 
   static Future<void> scheduleMedicine(
       int id, int hour, int minute, String name) async {
     final scheduledTime = _nextInstance(hour, minute);
@@ -155,41 +146,75 @@ class NotificationService {
     await _triggerAlarm(id, name, scheduledTime);
   }
 
-  /// 🔔 CORE ALARM LOGIC (Used by both Medicine and Snooze)
+  /// 🔔 CORE SMART ALARM LOGIC
   static Future<void> _triggerAlarm(
       int id, String name, tz.TZDateTime scheduledTime) async {
+      
+    final nameLower = name.toLowerCase();
+    bool isWater = nameLower.contains('water');
+    bool isExercise = nameLower.contains('exercise');
+
+    String channelId = 'med_channel_v3'; // Bumped ID to refresh Android's cache
+    String channelName = 'Medicine Alarms';
+    String title = 'Medicine Reminder';
+    String body = 'Time to take: $name';
+    String soundFile = 'med_sound';
+    bool loopSound = true; 
+
+    if (isWater) {
+      channelId = 'water_channel_v3';
+      channelName = 'Water Reminders';
+      title = 'Hydration Reminder 💧';
+      body = 'Time to drink a glass of water!';
+      soundFile = 'water_sound';
+      loopSound = false; 
+    } 
+    else if (isExercise) {
+      channelId = 'exercise_channel_v3';
+      channelName = 'Exercise Reminders';
+      title = 'Exercise Time! 🏃';
+      body = 'Time to get up and move!';
+      soundFile = 'exercise_sound';
+      loopSound = false; 
+    }
+
     final insistentFlag = Int32List.fromList(<int>[4]);
+
+    List<AndroidNotificationAction>? notificationActions;
+    if (!isWater && !isExercise) {
+      notificationActions = <AndroidNotificationAction>[
+        const AndroidNotificationAction(
+          'taken',
+          '✅ Meds Taken',
+          cancelNotification: true, // Dismisses the visual notification
+        ),
+        const AndroidNotificationAction(
+          'snooze',
+          '💤 Snooze (5m)',
+          cancelNotification: true,
+        ),
+      ];
+    }
 
     await notifications.zonedSchedule(
       id,
-      "Medicine Reminder",
-      "Time to take: $name",
+      title,
+      body,
       scheduledTime,
       NotificationDetails(
         android: AndroidNotificationDetails(
-          'alarm_channel_v4', // 🛑 ID changed to force Android to register buttons/sound
-          'Medicine Alarms',
+          channelId, 
+          channelName,
           importance: Importance.max,
           priority: Priority.max,
           fullScreenIntent: true,
-          additionalFlags: insistentFlag, // Loops the sound continuously
-          audioAttributesUsage: AudioAttributesUsage.alarm, // Uses Alarm volume
-          sound: const RawResourceAndroidNotificationSound('alarm_sound'), // ✅ Add alarm_sound.mp3 to res/raw/
-          actions: <AndroidNotificationAction>[
-            const AndroidNotificationAction(
-              'taken',
-              '✅ Meds Taken',
-              cancelNotification: true, // Stops the alarm instantly
-            ),
-            const AndroidNotificationAction(
-              'snooze',
-              '💤 Snooze (5m)',
-              cancelNotification: true, // Clears this alarm, background task schedules the next
-            ),
-          ],
+          additionalFlags: loopSound ? insistentFlag : null, 
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+          sound: RawResourceAndroidNotificationSound(soundFile), 
+          actions: notificationActions,
         ),
       ),
-      payload: name, // Passes medicine name to the background handler for snoozing
+      payload: name, 
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -197,46 +222,13 @@ class NotificationService {
     );
   }
 
-  /// 💧 WATER (Standard repeating interval, no looping sound)
-  static Future<void> scheduleWater(int id, int intervalMinutes) async {
-    await notifications.periodicallyShow(
-      id,
-      "Hydration Reminder",
-      "Drink water 💧",
-      RepeatInterval.everyMinute,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'water_channel',
-          'Water',
-          importance: Importance.high,
-        ),
-      ),
-    );
-  }
-
-  /// 🏃 EXERCISE
-  static Future<void> scheduleExercise() async {
-    await scheduleMedicine(200, 8, 0, "Morning Exercise");
-    await scheduleMedicine(201, 17, 0, "Evening Exercise");
-  }
-
   /// 🔁 Helper
   static tz.TZDateTime _nextInstance(int hour, int minute) {
     final now = tz.TZDateTime.now(tz.local);
-
-    var scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
-
+    var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
     if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }
-
     return scheduled;
   }
 }
